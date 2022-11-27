@@ -263,5 +263,6 @@ public:
         schedule_processes();
         print_schedule();
         save_schedule();
+        system("python3 .\\plot.py fcfs");
     }
 };
