@@ -3,15 +3,18 @@ using namespace std;
 
 // PID,name,type,Priority,AT,BT
 
+class SJFNP{
+public:
 struct Process
 {
-    // populating from input
     int PID;
     string name;
-    bool cpu_bound;
     int priority;
     int arrival_time;
     int burst_time;
+    int burst_time1;
+    int burst_time2;
+    int IO_time;
     // derived variables
     int start_time;       // timestamp of first-time cpu allocation
     int completion_time;  // timestamp of termination
@@ -34,7 +37,7 @@ struct cmpArv
     bool operator()(struct Process &x, struct Process &y)
     {
 
-        return (x.arrival_time < y.arrival_time);
+        return (y.arrival_time < x.arrival_time);
     }
 };
 
@@ -48,134 +51,117 @@ struct cmpId
 };
 
 priority_queue<struct Process, vector<struct Process>, cmPtq> Cpt;
-priority_queue<struct Process, vector<struct Process>, cmPtq> IOpt;
+priority_queue<struct Process, vector<struct Process>, cmpArv> INP;
+map<int, pair<bool, int> > Vis;
 
-void ProcADD(int &cur_time, vector<struct Process> &CPU_Proc)
+void ProcADD(int &cur_time)
 {
-    if (CPU_Proc.size() == 0)
+    if (INP.empty())
         return;
-    if (Cpt.empty() && cur_time < CPU_Proc[0].arrival_time)
-        cur_time = CPU_Proc[0].arrival_time;
-    int idx = 0, siz = CPU_Proc.size();
-
-    while (idx < siz && cur_time >= CPU_Proc[idx].arrival_time)
-    {
-        Cpt.push(*(CPU_Proc.begin()));
-        CPU_Proc.erase(CPU_Proc.begin());
-        idx++;
-    }
-
-    return;
-}
-
-void IoADD(int &cur_time, vector<struct Process> &IO_Proc)
-{
-    if (IO_Proc.size() == 0)
-        return;
-    if (IOpt.empty() && cur_time < IO_Proc[0].arrival_time)
-        cur_time = IO_Proc[0].arrival_time;
-    int idx = 0, siz = IO_Proc.size();
-    while (idx < siz && cur_time >= IO_Proc[idx].arrival_time)
-    {
-        IOpt.push(*(IO_Proc.begin()));
-        IO_Proc.erase(IO_Proc.begin());
-        idx++;
-    }
-
-    return;
-}
-
-int main()
-{
-    string PID, Priority, AT, BT, Type, Name;
-    ifstream inp("ab.csv");
-    struct Process obj;
-    vector<struct Process> INP;
-    while (inp.peek() != EOF)
-    {
-        getline(inp, PID, ',');
-        getline(inp, Name, ',');
-        getline(inp, Type, ',');
-        getline(inp, Priority, ',');
-        getline(inp, AT, ',');
-        getline(inp, BT, '\n');
-        obj.PID = (stoi(PID));
-        obj.name = Name;
-        obj.cpu_bound = (stoi(Type));
-        obj.priority = (stoi(Priority));
-        obj.arrival_time = (stoi(AT));
-        obj.burst_time = (stoi(BT));
-        INP.push_back(obj);
-    }
-    inp.close();
-
-    // Sorting on the basis of Arrival Time
-    sort(INP.begin(), INP.end(), cmpArv());
-
-    vector<struct Process> CPU_Proc;
-    vector<struct Process> IO_Proc;
-    vector<struct Process> CPU_Op;
-    vector<struct Process> IO_Op;
-    vector<struct Process> Ans;
-    int idx, cur_time = 0;
     struct Process tp;
-    for (idx = 0; idx < INP.size(); idx++)
+    tp = INP.top();
+    if (Cpt.empty() && (cur_time <tp.arrival_time))
+        cur_time = tp.arrival_time;
+
+    while (!INP.empty() && cur_time >= tp.arrival_time)
+    {   
+        Cpt.push(tp);
+        INP.pop();
+        if(!INP.empty())
+        tp=INP.top();
+    }
+
+    return;
+}
+
+
+vector<string> split(string str,char delimiter){
+    int n = str.length();
+    vector<string> result;
+    string temp = "";
+    for(int i=0;i<n;i++){
+        char ch = str[i];
+        if(ch != delimiter){
+            temp.append(1,ch);
+        }
+        else{
+            result.push_back(temp);
+            temp = "";
+        }
+    }
+    if(temp != ""){
+        result.push_back(temp);
+    }
+    return result;
+}
+
+
+void exec(vector<string> Vec)
+{
+    string PID, Priority, AT, BT1, BT2, IOt,  Name;
+    cout<<"hii"<<endl;
+    struct Process obj;
+    int idx,i,ct=0;
+    string temp;
+    for(string proc : Vec){
+        vector<string> splits = split(proc,' ');
+        obj.PID = stoi(splits[0]);
+        obj.name = splits[1];
+        obj.priority = (stoi(splits[3]));
+        obj.arrival_time = (stoi(splits[4]));
+        obj.burst_time1 = (stoi(splits[5]));
+        obj.burst_time = (stoi(splits[5]));
+        obj.IO_time = (stoi(splits[6]));
+        obj.burst_time2 = (stoi(splits[7]));
+        Vis[obj.PID] = make_pair(false, obj.arrival_time);
+        INP.push(obj);
+    }
+    
+    vector<struct Process> Ans;
+    int cur_time = 0;
+    struct Process tp;
+
+    ProcADD(cur_time);
+    while (!Cpt.empty())
     {
-        if (INP[idx].cpu_bound)
-            CPU_Proc.push_back(INP[idx]);
+        tp = Cpt.top();
+        Cpt.pop();
+        if (Vis[tp.PID].first == false)
+        {   
+            tp.start_time = cur_time;
+           cout<<tp.PID<<" "<<cur_time<<endl;
+            cur_time += tp.burst_time;
+            tp.arrival_time = (cur_time + tp.IO_time);
+            tp.burst_time = tp.burst_time2;
+            Vis[tp.PID].first = true;
+            INP.push(tp);
+            ProcADD(cur_time);
+        }
         else
-        {
-            IO_Proc.push_back(INP[idx]);
+        {   cout<<tp.PID<<" "<<cur_time<<endl;
+            tp.arrival_time = Vis[tp.PID].second;
+            cur_time += tp.burst_time;
+            tp.completion_time = cur_time;
+            tp.turn_around_time = tp.completion_time - tp.arrival_time;
+            tp.response_time = tp.start_time - tp.arrival_time;
+            tp.waiting_time = tp.turn_around_time - (tp.burst_time1+tp.burst_time2);
+            Ans.push_back(tp);
         }
     }
 
-    ProcADD(cur_time, CPU_Proc);
-
-    while (!Cpt.empty())
-    { 
-        tp = Cpt.top();
-        Cpt.pop();
-        tp.start_time = cur_time;
-        cur_time += tp.burst_time;
-        tp.completion_time = cur_time;
-        tp.turn_around_time = tp.completion_time - tp.arrival_time;
-        tp.response_time = tp.start_time - tp.arrival_time;
-        tp.waiting_time = tp.turn_around_time - tp.burst_time;
-        CPU_Op.push_back(tp);
-        ProcADD(cur_time, CPU_Proc);
-    }
-    cout << endl;
-    // code for I/O Process
-
-    cur_time = 0;
-    IoADD(cur_time, IO_Proc);
-    while (!IOpt.empty())
-    {
-        tp = IOpt.top();
-        IOpt.pop();
-        tp.start_time = cur_time;
-        cur_time += tp.burst_time;
-        tp.completion_time = cur_time;
-        tp.turn_around_time = tp.completion_time - tp.arrival_time;
-        tp.response_time = tp.start_time - tp.arrival_time;
-        tp.waiting_time = tp.turn_around_time - tp.burst_time;
-        IO_Op.push_back(tp);
-        IoADD(cur_time, IO_Proc);
-    }
-
-    for (idx = 0; idx < CPU_Op.size(); idx++)
-        Ans.push_back(CPU_Op[idx]);
-
-    for (idx = 0; idx < IO_Op.size(); idx++)
-        Ans.push_back(IO_Op[idx]);
-
+    
     sort(Ans.begin(), Ans.end(), cmpId());
-
+    cout<<"siz"<<Ans.size()<<endl;
+    string s;
+    ofstream wrt("SJFNP_output.csv");
+     wrt << "id,name,priority,arrival,burst1,io,burst2,start,resp,compl,turn,wait\n";
     for (idx = 0; idx < Ans.size(); idx++)
     {
-        cout << Ans[idx].PID << " "; //<<Ans[idx].name<<" "<<Ans[idx].cpu_bound<<" "<<Ans[idx].priority<<" "<<Ans[idx].arrival_time<<" "<<Ans[idx].burst_time<<" ";
-        cout << Ans[idx].start_time << " " << Ans[idx].completion_time << " " << Ans[idx].waiting_time << " " << Ans[idx].turn_around_time << " " << Ans[idx].response_time << endl;
+     s= (to_string(Ans[idx].PID) + ","+Ans[idx].name+"," +to_string(Ans[idx].priority)+","+to_string(Ans[idx].arrival_time)+","+to_string(Ans[idx].burst_time1)+","+to_string(Ans[idx].IO_time)+","+to_string(Ans[idx].burst_time2)+
+        ","+to_string(Ans[idx].start_time) + ","+to_string(Ans[idx].response_time)+","+to_string(Ans[idx].completion_time)+"," +to_string(Ans[idx].turn_around_time)+","+to_string(Ans[idx].waiting_time)+"\n");
+       wrt<<s;
     }
-
-    return 0;
+    wrt.close();
 }
+
+};
